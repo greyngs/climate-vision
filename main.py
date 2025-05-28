@@ -5,6 +5,7 @@ from streamlit_folium import st_folium
 from modules.data_provider import get_image
 from modules.google_earth_engine import initialize_gee
 from modules.watershed_method import watershed
+from modules.ndsi_watershed_method import ndsi_watershed
 
 # Page configuration
 st.set_page_config(
@@ -34,7 +35,7 @@ st.markdown("<p class='center-text'><a href='https://sentinels.copernicus.eu/web
 st.markdown("<h3 class='center-text'>Select a location on the map</h3>", unsafe_allow_html=True)
 
 # Default values
-default_lat = 4.8808  # Vatnajökull Glacier, Iceland
+default_lat = 4.8808  # Nevado del Ruiz, Colombia
 default_lon = -75.3164
 default_init_date = datetime.date(2024, 1, 15)
 default_end_date = datetime.date(2025, 1, 15)
@@ -80,18 +81,28 @@ with col2:
     end_date = st.date_input("To:", default_end_date)
 
 if col2.button("Compare", icon="🧊", use_container_width=True):
-    image_init = get_image(map_lat, map_lon, init_date, zoom)
-    image_end = get_image(map_lat, map_lon, end_date, zoom)
+    image_init = get_image(map_lat, map_lon, init_date, zoom, False, 30)
+    image_end = get_image(map_lat, map_lon, end_date, zoom, False, 30)
+
+    image_init_ndsi = get_image(map_lat, map_lon, init_date, zoom, True, 30)
+    image_end_ndsi = get_image(map_lat, map_lon, end_date, zoom, True, 30)
 
     if image_init.any() and image_end.any():
         image_init_watershed = watershed(image_init)
         image_end_watershed = watershed(image_end)
 
+        image_init_ndsi_watershed = ndsi_watershed(image_init_ndsi)
+        image_end_ndsi_watershed = ndsi_watershed(image_end_ndsi)
+
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
         col2.write(init_date)
         col2.image(image_init, caption="Satellite RGB", width=400)
-        col2.image(image_init_watershed, caption="Watershed", width=400)
+        col2.image(image_init_watershed, caption="RGB Watershed", width=400)
+        col2.image(image_init_ndsi, caption="NDSI", width=400)
+        col2.image(image_init_ndsi_watershed, caption="NDSI Watershed", width=400)
 
         col3.write(end_date)
         col3.image(image_end, caption="Satellite RGB", width=400)
         col3.image(image_end_watershed, caption="Watershed", width=400)
+        col3.image(image_end_ndsi, caption="NDSI", width=400)
+        col3.image(image_end_ndsi_watershed, caption="NDSI Watershed", width=400)

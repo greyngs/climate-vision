@@ -3,8 +3,7 @@ import numpy as np
 import ee
 import geemap
 
-def get_image(latitude, longitude, date, zoom_level, cloud_cover_max=30):
-    """Retrieve Sentinel-2 satellite imagery for a specific location and date"""
+def get_image(latitude, longitude, date, zoom_level, is_ndsi, cloud_cover_max=30):
     formatted_date = date.strftime('%Y-%m-%d')
     
     # Create point and area of interest
@@ -32,9 +31,6 @@ def get_image(latitude, longitude, date, zoom_level, cloud_cover_max=30):
         print(f"No images found for date {formatted_date} with less than {cloud_cover_max}% cloud cover")
         print("Trying with a wider date range...")
         
-        # No need to expand date range again as it's already set to 30 days
-        # This appears to be redundant in the original code
-        
         image_count = collection.size().getInfo()
         if image_count == 0:
             import streamlit as st
@@ -47,23 +43,33 @@ def get_image(latitude, longitude, date, zoom_level, cloud_cover_max=30):
     # Get image date for filename
     image_date = ee.Date(image.get('system:time_start')).format('YYYY-MM-dd').getInfo()
     
-    # Select bands (RGB for true color)
+    # Select bands for RGB
     rgb_image = image.select(['B4', 'B3', 'B2'])
     
-    # Prepare visualization parameters
-    rgb_vis_params = {
-        'min': 0,
-        'max': 3000,
-        'bands': ['B4', 'B3', 'B2']
-    }
+    # Calculate NDSI = (Green - SWIR1) / (Green + SWIR1)
+    # For Sentinel-2: Green = B3, SWIR1 = B11
+    green = image.select('B3')
+    swir1 = image.select('B11')
+    ndsi = green.subtract(swir1).divide(green.add(swir1)).rename('NDSI')
     
     # Calculate scale based on zoom level
     scale = 30  # Keep between 10 and 1000 meters
     
-    # Get image as NumPy array
-    rgb_numpy = geemap.ee_to_numpy(rgb_image, region=aoi, bands=["B4", "B3", "B2"], scale=scale)
+    if is_ndsi:
+        # Get NDSI image as NumPy array
+        ndsi_numpy = geemap.ee_to_numpy(ndsi, region=aoi, scale=scale)
+        
+        # Normalize NDSI values for visualization (0-255)
+        if ndsi_numpy is not None:
+            # NDSI values range from -1 to 1, normalize to 0-255
+            ndsi_numpy = np.clip((ndsi_numpy + 1) / 2 * 255, 0, 255).astype(np.uint8)
 
-    # Normalize values for visualization (0-255)
+        return ndsi_numpy
+    
+    # Get RGB image as NumPy array
+    rgb_numpy = geemap.ee_to_numpy(rgb_image, region=aoi, bands=["B4", "B3", "B2"], scale=scale)
+    
+    # Normalize RGB values for visualization (0-255)
     if rgb_numpy is not None:
         rgb_numpy = np.clip((rgb_numpy / 3000) * 255, 0, 255).astype(np.uint8)
 
